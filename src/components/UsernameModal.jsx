@@ -54,7 +54,7 @@ export default function UsernameModal({ initialName = '', onSave, onClose }) {
             value={name}
             onChange={(e) => setName(e.target.value)}
             maxLength={24}
-            placeholder="örn. Ayşe"
+            placeholder="örn. Hato"
             className="mt-1.5 h-10 w-full rounded-lg border border-white/[0.08] bg-black/40 px-3 text-[14px] text-white placeholder:text-zinc-600 shadow-[inset_0_1px_2px_rgba(0,0,0,0.5)] outline-none transition focus:border-indigo-400/60 focus:ring-4 focus:ring-indigo-500/15"
           />
           <p className="mt-1.5 text-[11.5px] text-zinc-600">2–24 karakter</p>
