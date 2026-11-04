@@ -9,15 +9,18 @@ const supabaseBackend = {
   async list() {
     const { data, error } = await supabase.from('slots').select(COLUMNS)
     if (error) throw error
-    return data
+    return data ?? []
   },
 
   subscribe({ onUpsert, onDelete, onResync, onStatus }) {
     const channel = supabase
       .channel('slots-live')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'slots' }, (payload) => {
-        if (payload.eventType === 'DELETE') onDelete(payload.old.slot_index)
-        else onUpsert(payload.new)
+        if (payload.eventType === 'DELETE') {
+          if (payload.old?.slot_index != null) onDelete(payload.old.slot_index)
+        } else if (payload.new?.slot_index != null) {
+          onUpsert(payload.new)
+        }
       })
       .subscribe((state) => {
         if (state === 'SUBSCRIBED') {
@@ -38,9 +41,19 @@ const supabaseBackend = {
       .select(COLUMNS)
       .single()
     if (error) {
-      if (error.code === '23505') return { ok: false, reason: 'taken' }
-      return { ok: false, reason: 'error', message: error.message }
+      if (error.code !== '23505') return { ok: false, reason: 'error', message: error.message }
+      // Satır zaten var: sahipsiz (önceden tohumlanmış) ise sahiplen, değilse başkası almış demektir.
+      const { data: updated, error: updateError } = await supabase
+        .from('slots')
+        .update({ owner_name: ownerName, owner_id: (await ensureSession()).id, claimed_at: new Date().toISOString() })
+        .eq('slot_index', index)
+        .is('owner_id', null)
+        .select(COLUMNS)
+      if (updateError) return { ok: false, reason: 'error', message: updateError.message }
+      if (!updated?.length) return { ok: false, reason: 'taken' }
+      return { ok: true, row: updated[0] }
     }
+    if (!data) return { ok: false, reason: 'error', message: 'Sunucu kaydı döndürmedi.' }
     return { ok: true, row: data }
   },
 
@@ -48,7 +61,7 @@ const supabaseBackend = {
     const { data, error } = await supabase.from('slots').delete().eq('slot_index', index).select('slot_index')
     if (error) return { ok: false, reason: 'error', message: error.message }
     // RLS sahibi olmayanın silmesini sessizce engeller (0 satır döner).
-    if (data.length === 0) return { ok: false, reason: 'forbidden' }
+    if (!data?.length) return { ok: false, reason: 'forbidden' }
     return { ok: true }
   },
 }

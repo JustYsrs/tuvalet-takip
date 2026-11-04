@@ -32,8 +32,12 @@ function seedRows() {
 }
 
 function read() {
-  const raw = localStorage.getItem(STORE_KEY)
-  if (raw) return JSON.parse(raw)
+  try {
+    const parsed = JSON.parse(localStorage.getItem(STORE_KEY) ?? 'null')
+    if (parsed && typeof parsed === 'object') return parsed
+  } catch {
+    // Bozuk kayıt: aşağıda yeniden tohumlanır.
+  }
   const rows = seedRows()
   localStorage.setItem(STORE_KEY, JSON.stringify(rows))
   return rows
@@ -59,7 +63,7 @@ export const demoBackend = {
   },
 
   async list() {
-    return Object.values(read())
+    return Object.values(read()).filter(Boolean)
   },
 
   subscribe({ onResync, onStatus }) {

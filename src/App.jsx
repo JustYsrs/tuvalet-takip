@@ -136,12 +136,13 @@ function Board() {
 
   const contributors = useMemo(() => {
     const byOwner = new Map()
-    for (const row of slots.values()) {
+    for (const row of slots?.values() ?? []) {
+      const name = row.owner_name || 'Anonim'
       const entry = byOwner.get(row.owner_id)
-      if (!entry) byOwner.set(row.owner_id, { id: row.owner_id, name: row.owner_name, count: 1, last: row.claimed_at })
+      if (!entry) byOwner.set(row.owner_id, { id: row.owner_id, name, count: 1, last: row.claimed_at })
       else {
         entry.count++
-        if (row.claimed_at > entry.last) Object.assign(entry, { name: row.owner_name, last: row.claimed_at })
+        if (row.claimed_at > entry.last) Object.assign(entry, { name, last: row.claimed_at })
       }
     }
     return [...byOwner.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'tr'))
@@ -183,7 +184,7 @@ function Board() {
 
     if (row.owner_id !== userId) {
       setShaking(index)
-      push('warning', 'Bu slot sana ait değil', `${range} bloğunu ${row.owner_name} kilitledi. Sadece o geri bırakabilir.`)
+      push('warning', 'Bu slot sana ait değil', `${range} bloğunu ${row.owner_name || 'başka biri'} kilitledi. Sadece o geri bırakabilir.`)
       return
     }
 

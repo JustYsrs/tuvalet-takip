@@ -13,10 +13,11 @@ let sessionPromise = null
 export function ensureSession() {
   sessionPromise ??= (async () => {
     const { data } = await supabase.auth.getSession()
-    if (data.session?.user) return data.session.user
+    if (data?.session?.user) return data.session.user
 
     const { data: signIn, error } = await supabase.auth.signInAnonymously()
     if (error) throw error
+    if (!signIn?.user) throw new Error('Anonim oturum açılamadı. Supabase ayarlarında anonymous sign-ins açık mı?')
     return signIn.user
   })().catch((err) => {
     sessionPromise = null

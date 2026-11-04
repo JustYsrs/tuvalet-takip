@@ -15,6 +15,11 @@ export function slotEnd(index) {
   return formatMinutes((index + 1) * SLOT_MINUTES)
 }
 
+/** Önceden tohumlanmış tablolarda sahibi olmayan satırlar boş slot sayılır. */
+export function isClaimed(row) {
+  return row?.slot_index != null && Boolean(row.owner_id)
+}
+
 export function currentSlotIndex(date = new Date()) {
   return Math.floor((date.getHours() * 60 + date.getMinutes()) / SLOT_MINUTES)
 }
@@ -24,7 +29,8 @@ export const HOURS = Array.from({ length: 24 }, (_, hour) => ({
   slots: Array.from({ length: 60 / SLOT_MINUTES }, (_, i) => hour * (60 / SLOT_MINUTES) + i),
 }))
 
-function hashString(str) {
+function hashString(value) {
+  const str = String(value ?? '')
   let h = 2166136261
   for (let i = 0; i < str.length; i++) {
     h ^= str.charCodeAt(i)
@@ -50,8 +56,10 @@ export function ownerPalette(key) {
 }
 
 export function initials(name) {
-  const parts = name.trim().split(/\s+/).filter(Boolean)
-  const letters = parts.length > 1 ? parts[0][0] + parts[1][0] : name.trim().slice(0, 2)
+  const clean = String(name ?? '').trim()
+  if (!clean) return '?'
+  const parts = clean.split(/\s+/)
+  const letters = parts.length > 1 ? parts[0][0] + parts[1][0] : clean.slice(0, 2)
   return letters.toLocaleUpperCase('tr-TR')
 }
 

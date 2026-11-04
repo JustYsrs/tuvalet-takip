@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { backend } from '../lib/backend'
+import { isClaimed } from '../lib/slots'
 
 export function useSlots() {
   const [userId, setUserId] = useState(null)
@@ -7,10 +8,6 @@ export function useSlots() {
   const [ready, setReady] = useState(false)
   const [status, setStatus] = useState('connecting')
   const [error, setError] = useState(null)
-
-  const upsertLocal = useCallback((row) => {
-    setSlots((prev) => new Map(prev).set(row.slot_index, row))
-  }, [])
 
   const removeLocal = useCallback((index) => {
     setSlots((prev) => {
@@ -21,9 +18,20 @@ export function useSlots() {
     })
   }, [])
 
+  const upsertLocal = useCallback(
+    (row) => {
+      if (!isClaimed(row)) {
+        if (row?.slot_index != null) removeLocal(row.slot_index)
+        return
+      }
+      setSlots((prev) => new Map(prev).set(row.slot_index, row))
+    },
+    [removeLocal],
+  )
+
   const load = useCallback(async () => {
-    const rows = await backend.list()
-    setSlots(new Map(rows.map((row) => [row.slot_index, row])))
+    const rows = (await backend.list()) ?? []
+    setSlots(new Map(rows.filter(isClaimed).map((row) => [row.slot_index, row])))
   }, [])
 
   useEffect(() => {
@@ -61,7 +69,7 @@ export function useSlots() {
   const claim = useCallback(
     async (index, ownerName) => {
       const result = await backend.claim(index, ownerName)
-      if (result.ok) upsertLocal(result.row)
+      if (result.ok && result.row) upsertLocal(result.row)
       else if (result.reason === 'taken') await load().catch(() => {})
       return result
     },
