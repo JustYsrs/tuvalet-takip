@@ -1,16 +1,25 @@
-import { PartyPopper, Pencil, RotateCcw, Shuffle, Toilet } from 'lucide-react'
+import { PartyPopper, RotateCcw, Settings, Shuffle, Toilet } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import AccountModal from './components/AccountModal'
 import Contributors from './components/Contributors'
 import ProgressBar from './components/ProgressBar'
 import SetupNotice from './components/SetupNotice'
 import SlotCard from './components/SlotCard'
 import Toasts from './components/Toasts'
-import UsernameModal from './components/UsernameModal'
 import { useSlots } from './hooks/useSlots'
 import { useToasts } from './hooks/useToasts'
 import { isDemo } from './lib/backend'
 import { fillDemoRandomly, resetDemo } from './lib/demoBackend'
-import { currentSlotIndex, HOURS, initials, ownerPalette, slotEnd, slotStart, TOTAL_SLOTS } from './lib/slots'
+import {
+  currentSlotIndex,
+  defaultHue,
+  HOURS,
+  initials,
+  ownerPalette,
+  slotEnd,
+  slotStart,
+  TOTAL_SLOTS,
+} from './lib/slots'
 
 const NAME_KEY = 'tuvalet-takip:username'
 const ARM_TIMEOUT_MS = 3000
@@ -106,7 +115,7 @@ function GhostButton({ icon: Icon, children, onClick }) {
 
 function Board() {
   const [username, setUsername] = useState(() => localStorage.getItem(NAME_KEY) ?? '')
-  const [editingName, setEditingName] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const [pending, setPending] = useState(() => new Set())
   const [armed, setArmed] = useState(null)
   const [shaking, setShaking] = useState(null)
@@ -114,7 +123,19 @@ function Board() {
   const [filter, setFilter] = useState('all')
   const [nowIndex, setNowIndex] = useState(() => currentSlotIndex())
 
-  const { userId, ready, slots, status, error, claim, release } = useSlots()
+  const {
+    userId,
+    ready,
+    slots,
+    profiles,
+    profilesAvailable,
+    status,
+    error,
+    claim,
+    release,
+    releaseAll,
+    saveProfile,
+  } = useSlots()
   const { toasts, push, dismiss } = useToasts()
 
   useEffect(() => {
@@ -134,27 +155,54 @@ function Board() {
     return () => clearTimeout(timer)
   }, [shaking])
 
+  const ownerOf = useCallback(
+    (ownerId, fallbackName) => {
+      const profile = profiles.get(ownerId)
+      const name = (ownerId === userId && username) || profile?.display_name || fallbackName || 'Anonim'
+      return { name, palette: ownerPalette(ownerId, profile?.hue ?? undefined) }
+    },
+    [profiles, userId, username],
+  )
+
   const contributors = useMemo(() => {
     const byOwner = new Map()
     for (const row of slots?.values() ?? []) {
-      const name = row.owner_name || 'Anonim'
       const entry = byOwner.get(row.owner_id)
-      if (!entry) byOwner.set(row.owner_id, { id: row.owner_id, name, count: 1, last: row.claimed_at })
+      if (!entry) byOwner.set(row.owner_id, { id: row.owner_id, fallback: row.owner_name, count: 1, last: row.claimed_at })
       else {
         entry.count++
-        if (row.claimed_at > entry.last) Object.assign(entry, { name, last: row.claimed_at })
+        if (row.claimed_at > entry.last) Object.assign(entry, { fallback: row.owner_name, last: row.claimed_at })
       }
     }
-    return [...byOwner.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'tr'))
-  }, [slots])
+    return [...byOwner.values()]
+      .map((c) => ({ ...c, ...ownerOf(c.id, c.fallback) }))
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'tr'))
+  }, [slots, ownerOf])
 
   const mineCount = contributors.find((c) => c.id === userId)?.count ?? 0
   const filled = slots.size
+  const myProfile = userId ? profiles.get(userId) : null
+  const myHue = myProfile?.hue ?? (userId ? defaultHue(userId) : undefined)
 
-  function saveName(name) {
+  async function handleSaveAccount({ name, hue }) {
+    const isFirstTime = !username
     localStorage.setItem(NAME_KEY, name)
     setUsername(name)
-    setEditingName(false)
+    const result = await saveProfile({ displayName: name, hue })
+    setSettingsOpen(false)
+    if (result.ok) {
+      if (!isFirstTime) push('success', 'Hesap güncellendi', 'Adın ve rengin herkesin ekranında yenilendi.')
+    } else if (result.missingTable) {
+      push('warning', 'Renk sadece sende görünür', "Herkese görünmesi için supabase/schema.sql'i yeniden çalıştır.")
+    } else {
+      push('error', 'Ayarlar kaydedilemedi', result.message)
+    }
+  }
+
+  async function handleReleaseAll() {
+    const result = await releaseAll()
+    if (result.ok) push('info', 'Slotların bırakıldı', `${result.count} slot tekrar boşta.`)
+    else push('error', 'İşlem başarısız', result.message)
   }
 
   const setSlotPending = useCallback((index, on) => {
@@ -184,7 +232,7 @@ function Board() {
 
     if (row.owner_id !== userId) {
       setShaking(index)
-      push('warning', 'Bu slot sana ait değil', `${range} bloğunu ${row.owner_name || 'başka biri'} kilitledi. Sadece o geri bırakabilir.`)
+      push('warning', 'Bu slot sana ait değil', `${range} bloğunu ${ownerOf(row.owner_id, row.owner_name).name} kilitledi. Sadece o geri bırakabilir.`)
       return
     }
 
@@ -211,7 +259,7 @@ function Board() {
 
   if (status === 'error') return <SetupNotice error={error} />
 
-  const myPalette = userId ? ownerPalette(userId) : null
+  const myPalette = userId ? ownerPalette(userId, myHue) : null
 
   return (
     <>
@@ -236,9 +284,9 @@ function Board() {
               <StatusPill status={status} />
               {username && myPalette && (
                 <button
-                  onClick={() => setEditingName(true)}
+                  onClick={() => setSettingsOpen(true)}
                   className="group flex h-7 items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.03] pr-2.5 pl-0.5 text-[12.5px] font-medium text-zinc-200 transition-all duration-200 hover:border-white/[0.16] hover:bg-white/[0.06] active:scale-95"
-                  title="Adını değiştir"
+                  title="Hesap ayarları"
                 >
                   <span
                     className="grid size-6 place-items-center rounded-full text-[9.5px] font-bold text-black/80"
@@ -247,7 +295,10 @@ function Board() {
                     {initials(username)}
                   </span>
                   <span className="hidden max-w-[8rem] truncate sm:inline">{username}</span>
-                  <Pencil size={11} className="text-zinc-500 transition-colors group-hover:text-zinc-200" />
+                  <Settings
+                    size={12}
+                    className="text-zinc-500 transition-all duration-300 group-hover:rotate-90 group-hover:text-zinc-200"
+                  />
                 </button>
               )}
             </div>
@@ -363,11 +414,14 @@ function Board() {
                     <div className="grid grid-cols-3 gap-1.5">
                       {indices.map((i) => {
                         const row = slots.get(i)
+                        const owner = row ? ownerOf(row.owner_id, row.owner_name) : null
                         return (
                           <SlotCard
                             key={i}
                             index={i}
                             row={row}
+                            ownerName={owner?.name}
+                            palette={owner?.palette}
                             isMine={Boolean(row && row.owner_id === userId)}
                             isNow={i === nowIndex}
                             isPending={pending.has(i)}
@@ -396,11 +450,18 @@ function Board() {
 
       <Toasts toasts={toasts} onDismiss={dismiss} />
 
-      {(!username || editingName) && (
-        <UsernameModal
+      {(!username || settingsOpen) && (
+        <AccountModal
+          key={username ? 'settings' : 'onboarding'}
+          mode={username ? 'settings' : 'onboarding'}
+          userId={userId}
           initialName={username}
-          onSave={saveName}
-          onClose={username ? () => setEditingName(false) : undefined}
+          initialHue={myHue}
+          mineCount={mineCount}
+          profilesAvailable={profilesAvailable}
+          onSave={handleSaveAccount}
+          onReleaseAll={handleReleaseAll}
+          onClose={() => setSettingsOpen(false)}
         />
       )}
     </>

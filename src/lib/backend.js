@@ -2,6 +2,7 @@ import { demoBackend } from './demoBackend'
 import { ensureSession, isSupabaseConfigured, supabase } from './supabase'
 
 const COLUMNS = 'slot_index, owner_name, owner_id, claimed_at'
+const PROFILE_COLUMNS = 'id, display_name, hue, updated_at'
 
 const supabaseBackend = {
   ensureSession,
@@ -12,7 +13,37 @@ const supabaseBackend = {
     return data ?? []
   },
 
-  subscribe({ onUpsert, onDelete, onResync, onStatus }) {
+  async listProfiles() {
+    const { data, error } = await supabase.from('profiles').select(PROFILE_COLUMNS)
+    if (error) throw error
+    return data ?? []
+  },
+
+  async saveProfile({ displayName, hue }) {
+    const user = await ensureSession()
+    const { data, error } = await supabase
+      .from('profiles')
+      .upsert({ id: user.id, display_name: displayName, hue, updated_at: new Date().toISOString() })
+      .select(PROFILE_COLUMNS)
+      .single()
+    if (error) {
+      const missingTable = error.code === '42P01' || error.code === 'PGRST205'
+      return { ok: false, missingTable, message: error.message }
+    }
+    return { ok: true, profile: data }
+  },
+
+  subscribe({ onUpsert, onDelete, onResync, onStatus, onProfile, onProfilesResync }) {
+    // Profiller ayrı kanalda: profiles tablosu henüz kurulmamışsa slot canlılığı etkilenmesin.
+    const profileChannel = supabase
+      .channel('profiles-live')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, (payload) => {
+        if (payload.new?.id) onProfile(payload.new)
+      })
+      .subscribe((state) => {
+        if (state === 'SUBSCRIBED') onProfilesResync()
+      })
+
     const channel = supabase
       .channel('slots-live')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'slots' }, (payload) => {
@@ -31,7 +62,10 @@ const supabaseBackend = {
           onStatus('offline')
         }
       })
-    return () => supabase.removeChannel(channel)
+    return () => {
+      supabase.removeChannel(channel)
+      supabase.removeChannel(profileChannel)
+    }
   },
 
   async claim(index, ownerName) {
@@ -63,6 +97,13 @@ const supabaseBackend = {
     // RLS sahibi olmayanın silmesini sessizce engeller (0 satır döner).
     if (!data?.length) return { ok: false, reason: 'forbidden' }
     return { ok: true }
+  },
+
+  async releaseAll() {
+    const user = await ensureSession()
+    const { data, error } = await supabase.from('slots').delete().eq('owner_id', user.id).select('slot_index')
+    if (error) return { ok: false, message: error.message }
+    return { ok: true, count: data?.length ?? 0 }
   },
 }
 

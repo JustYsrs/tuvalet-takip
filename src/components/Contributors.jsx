@@ -1,4 +1,4 @@
-import { initials, ownerPalette } from '../lib/slots'
+import { initials } from '../lib/slots'
 
 export default function Contributors({ contributors, userId, focusedId, onFocus }) {
   if (contributors.length === 0) {
@@ -8,7 +8,7 @@ export default function Contributors({ contributors, userId, focusedId, onFocus 
   return (
     <div className="flex flex-wrap gap-1.5">
       {contributors.map((c) => {
-        const palette = ownerPalette(c.id)
+        const { palette } = c
         const active = focusedId === c.id
         return (
           <button

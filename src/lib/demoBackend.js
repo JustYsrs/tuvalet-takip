@@ -4,6 +4,7 @@ import { TOTAL_SLOTS } from './slots'
 // Veriler localStorage'da tutulur; her sekme ayrı bir kullanıcıdır ve sekmeler arası canlı senkronize olur.
 
 const STORE_KEY = 'tuvalet-takip:demo-slots'
+const PROFILE_KEY = 'tuvalet-takip:demo-profiles'
 const USER_KEY = 'tuvalet-takip:demo-user'
 const LATENCY_MS = 250
 
@@ -48,6 +49,16 @@ function write(rows) {
   listeners.forEach((fn) => fn())
 }
 
+function readProfiles() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(PROFILE_KEY) ?? 'null')
+    if (parsed && typeof parsed === 'object') return parsed
+  } catch {
+    // Bozuk kayıt: boş kabul edilir.
+  }
+  return {}
+}
+
 function currentUserId() {
   let id = sessionStorage.getItem(USER_KEY)
   if (!id) {
@@ -66,9 +77,38 @@ export const demoBackend = {
     return Object.values(read()).filter(Boolean)
   },
 
-  subscribe({ onResync, onStatus }) {
+  async listProfiles() {
+    return Object.values(readProfiles()).filter(Boolean)
+  },
+
+  async saveProfile({ displayName, hue }) {
+    await wait()
+    const profiles = readProfiles()
+    const profile = { id: currentUserId(), display_name: displayName, hue, updated_at: new Date().toISOString() }
+    profiles[profile.id] = profile
+    localStorage.setItem(PROFILE_KEY, JSON.stringify(profiles))
+    return { ok: true, profile }
+  },
+
+  async releaseAll() {
+    await wait()
+    const rows = read()
+    const me = currentUserId()
+    let count = 0
+    for (const [index, row] of Object.entries(rows)) {
+      if (row?.owner_id === me) {
+        delete rows[index]
+        count++
+      }
+    }
+    localStorage.setItem(STORE_KEY, JSON.stringify(rows))
+    return { ok: true, count }
+  },
+
+  subscribe({ onResync, onStatus, onProfilesResync }) {
     const onStorage = (e) => {
       if (e.key === STORE_KEY) onResync()
+      if (e.key === PROFILE_KEY) onProfilesResync()
     }
     window.addEventListener('storage', onStorage)
     listeners.add(onResync)

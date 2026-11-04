@@ -8,6 +8,22 @@ export function useSlots() {
   const [ready, setReady] = useState(false)
   const [status, setStatus] = useState('connecting')
   const [error, setError] = useState(null)
+  const [profiles, setProfiles] = useState(() => new Map())
+  const [profilesAvailable, setProfilesAvailable] = useState(true)
+
+  const upsertProfile = useCallback((profile) => {
+    if (profile?.id) setProfiles((prev) => new Map(prev).set(profile.id, profile))
+  }, [])
+
+  const loadProfiles = useCallback(async () => {
+    try {
+      const rows = (await backend.listProfiles()) ?? []
+      setProfiles(new Map(rows.filter((p) => p?.id).map((p) => [p.id, p])))
+      setProfilesAvailable(true)
+    } catch {
+      setProfilesAvailable(false)
+    }
+  }, [])
 
   const removeLocal = useCallback((index) => {
     setSlots((prev) => {
@@ -43,7 +59,7 @@ export function useSlots() {
       .then(async (user) => {
         if (!active) return
         setUserId(user.id)
-        await load()
+        await Promise.all([load(), loadProfiles()])
         if (!active) return
         setReady(true)
 
@@ -52,6 +68,8 @@ export function useSlots() {
           onDelete: (index) => active && removeLocal(index),
           onResync: () => active && load().catch(() => {}),
           onStatus: (s) => active && setStatus(s),
+          onProfile: (profile) => active && upsertProfile(profile),
+          onProfilesResync: () => active && loadProfiles(),
         })
       })
       .catch((err) => {
@@ -64,7 +82,7 @@ export function useSlots() {
       active = false
       unsubscribe?.()
     }
-  }, [load, upsertLocal, removeLocal])
+  }, [load, loadProfiles, upsertLocal, removeLocal, upsertProfile])
 
   const claim = useCallback(
     async (index, ownerName) => {
@@ -86,5 +104,37 @@ export function useSlots() {
     [load, removeLocal],
   )
 
-  return { userId, ready, slots, status, error, claim, release }
+  const saveProfile = useCallback(
+    async (fields) => {
+      const result = await backend.saveProfile(fields)
+      if (result.ok) {
+        upsertProfile(result.profile)
+        setProfilesAvailable(true)
+      } else if (result.missingTable) {
+        setProfilesAvailable(false)
+      }
+      return result
+    },
+    [upsertProfile],
+  )
+
+  const releaseAll = useCallback(async () => {
+    const result = await backend.releaseAll()
+    await load().catch(() => {})
+    return result
+  }, [load])
+
+  return {
+    userId,
+    ready,
+    slots,
+    profiles,
+    profilesAvailable,
+    status,
+    error,
+    claim,
+    release,
+    releaseAll,
+    saveProfile,
+  }
 }

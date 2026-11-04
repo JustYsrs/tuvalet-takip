@@ -39,9 +39,28 @@ function hashString(value) {
   return h >>> 0
 }
 
-/** Kimliğe göre sabit, neon tonlu bir renk paleti üretir. */
-export function ownerPalette(key) {
-  const hue = hashString(key) % 360
+export const COLOR_PRESETS = [
+  { hue: 245, label: 'İndigo' },
+  { hue: 275, label: 'Mor' },
+  { hue: 300, label: 'Eflatun' },
+  { hue: 330, label: 'Pembe' },
+  { hue: 355, label: 'Kırmızı' },
+  { hue: 22, label: 'Turuncu' },
+  { hue: 45, label: 'Kehribar' },
+  { hue: 80, label: 'Limon' },
+  { hue: 140, label: 'Yeşil' },
+  { hue: 170, label: 'Turkuaz' },
+  { hue: 192, label: 'Camgöbeği' },
+  { hue: 215, label: 'Mavi' },
+]
+
+export function defaultHue(key) {
+  return hashString(key) % 360
+}
+
+/** Kimliğe (veya seçilmiş tona) göre neon tonlu bir renk paleti üretir. */
+export function ownerPalette(key, preferredHue) {
+  const hue = Number.isFinite(preferredHue) ? preferredHue : defaultHue(key)
   return {
     hue,
     text: `hsl(${hue} 90% 78%)`,

@@ -102,6 +102,42 @@ button:not(:disabled) {
   cursor: pointer;
 }
 
+.hue-slider {
+  appearance: none;
+  border-radius: 9999px;
+  background: linear-gradient(
+    90deg,
+    hsl(0 85% 62%),
+    hsl(60 85% 62%),
+    hsl(120 85% 62%),
+    hsl(180 85% 62%),
+    hsl(240 85% 62%),
+    hsl(300 85% 62%),
+    hsl(359 85% 62%)
+  );
+  cursor: pointer;
+}
+.hue-slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 9999px;
+  background: #fff;
+  border: 2px solid rgba(0, 0, 0, 0.5);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.3), 0 2px 8px rgba(0, 0, 0, 0.6);
+  transition: transform 0.15s;
+}
+.hue-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+}
+.hue-slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 9999px;
+  background: #fff;
+  border: 2px solid rgba(0, 0, 0, 0.5);
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

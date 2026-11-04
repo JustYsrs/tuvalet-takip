@@ -30,12 +30,44 @@ create policy "slots sadece sahibi siler"
 
 -- UPDATE politikası bilinçli olarak yok: bir slot el değiştiremez, yalnızca sahibi tarafından bırakılabilir.
 
+-- Hesap ayarları: görünen ad ve rozet rengi herkese görünür, yalnızca sahibi değiştirebilir.
+create table if not exists public.profiles (
+  id            uuid primary key default auth.uid() references auth.users (id) on delete cascade,
+  display_name  text not null check (char_length(btrim(display_name)) between 2 and 24),
+  hue           smallint check (hue between 0 and 359),
+  updated_at    timestamptz not null default now()
+);
+
+alter table public.profiles enable row level security;
+
+drop policy if exists "profiles herkes okuyabilir" on public.profiles;
+create policy "profiles herkes okuyabilir"
+  on public.profiles for select
+  using (true);
+
+drop policy if exists "profiles kendini olusturur" on public.profiles;
+create policy "profiles kendini olusturur"
+  on public.profiles for insert
+  to authenticated
+  with check (id = auth.uid());
+
+drop policy if exists "profiles kendini gunceller" on public.profiles;
+create policy "profiles kendini gunceller"
+  on public.profiles for update
+  to authenticated
+  using (id = auth.uid())
+  with check (id = auth.uid());
+
 do $$
+declare
+  t text;
 begin
-  if not exists (
-    select 1 from pg_publication_tables
-    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'slots'
-  ) then
-    alter publication supabase_realtime add table public.slots;
-  end if;
+  foreach t in array array['slots', 'profiles'] loop
+    if not exists (
+      select 1 from pg_publication_tables
+      where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t
+    ) then
+      execute format('alter publication supabase_realtime add table public.%I', t);
+    end if;
+  end loop;
 end $$;

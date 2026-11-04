@@ -1,8 +1,19 @@
 import { LoaderCircle, Lock, Plus, Undo2 } from 'lucide-react'
-import { initials, ownerPalette, slotEnd, slotStart } from '../lib/slots'
+import { initials, slotEnd, slotStart } from '../lib/slots'
 
-export default function SlotCard({ index, row, isMine, isNow, isPending, isArmed, isDimmed, isShaking, onClick }) {
-  const palette = row ? ownerPalette(row.owner_id) : null
+export default function SlotCard({
+  index,
+  row,
+  ownerName,
+  palette,
+  isMine,
+  isNow,
+  isPending,
+  isArmed,
+  isDimmed,
+  isShaking,
+  onClick,
+}) {
   const isHourStart = index % 3 === 0
 
   let cls =
@@ -35,7 +46,7 @@ export default function SlotCard({ index, row, isMine, isNow, isPending, isArmed
       disabled={isPending}
       className={cls}
       style={style}
-      title={`${slotStart(index)} – ${slotEnd(index)} · ${row ? row.owner_name : 'Boş'}`}
+      title={`${slotStart(index)} – ${slotEnd(index)} · ${row ? ownerName : 'Boş'}`}
     >
       {row && !isArmed && (
         <span
@@ -89,9 +100,9 @@ export default function SlotCard({ index, row, isMine, isNow, isPending, isArmed
               className="grid size-4 shrink-0 place-items-center rounded-full text-[8px] font-bold text-black/80"
               style={{ backgroundColor: palette.solid, boxShadow: palette.dotGlow }}
             >
-              {initials(row.owner_name)}
+              {initials(ownerName)}
             </span>
-            <span className="truncate">{isMine ? 'Sen' : row.owner_name}</span>
+            <span className="truncate">{isMine ? 'Sen' : ownerName}</span>
           </span>
         )}
       </div>
