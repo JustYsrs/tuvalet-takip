@@ -1,0 +1,71 @@
+export const SLOT_MINUTES = 20
+export const TOTAL_SLOTS = (24 * 60) / SLOT_MINUTES
+
+const pad = (n) => String(n).padStart(2, '0')
+
+function formatMinutes(total) {
+  return `${pad(Math.floor(total / 60))}:${pad(total % 60)}`
+}
+
+export function slotStart(index) {
+  return formatMinutes(index * SLOT_MINUTES)
+}
+
+export function slotEnd(index) {
+  return formatMinutes((index + 1) * SLOT_MINUTES)
+}
+
+export function currentSlotIndex(date = new Date()) {
+  return Math.floor((date.getHours() * 60 + date.getMinutes()) / SLOT_MINUTES)
+}
+
+export const HOURS = Array.from({ length: 24 }, (_, hour) => ({
+  hour,
+  slots: Array.from({ length: 60 / SLOT_MINUTES }, (_, i) => hour * (60 / SLOT_MINUTES) + i),
+}))
+
+function hashString(str) {
+  let h = 2166136261
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i)
+    h = Math.imul(h, 16777619)
+  }
+  return h >>> 0
+}
+
+/** Kimliğe göre sabit, neon tonlu bir renk paleti üretir. */
+export function ownerPalette(key) {
+  const hue = hashString(key) % 360
+  return {
+    hue,
+    text: `hsl(${hue} 90% 78%)`,
+    solid: `hsl(${hue} 85% 62%)`,
+    tint: `hsl(${hue} 85% 60% / 0.07)`,
+    soft: `hsl(${hue} 85% 60% / 0.14)`,
+    border: `hsl(${hue} 85% 65% / 0.28)`,
+    ring: `hsl(${hue} 85% 65% / 0.45)`,
+    glow: `0 0 0 1px hsl(${hue} 85% 65% / 0.06), 0 8px 28px -10px hsl(${hue} 90% 60% / 0.55)`,
+    dotGlow: `0 0 10px hsl(${hue} 90% 60% / 0.8)`,
+  }
+}
+
+export function initials(name) {
+  const parts = name.trim().split(/\s+/).filter(Boolean)
+  const letters = parts.length > 1 ? parts[0][0] + parts[1][0] : name.trim().slice(0, 2)
+  return letters.toLocaleUpperCase('tr-TR')
+}
+
+const UNIT_SUFFIX = ['ı', 'i', 'si', 'ü', 'ü', 'i', 'sı', 'si', 'i', 'u']
+const TENS_SUFFIX = { 1: 'u', 2: 'si', 3: 'u', 4: 'ı', 5: 'si', 6: 'ı', 7: 'i', 8: 'i', 9: 'ı' }
+
+/** Türkçe iyelik eki: 1'i, 2'si, 30'u, 40'ı ... */
+export function withPossessive(n) {
+  const unit = n % 10
+  const tens = Math.floor(n / 10) % 10
+  let suffix
+  if (n === 0) suffix = 'ı'
+  else if (unit !== 0) suffix = UNIT_SUFFIX[unit]
+  else if (tens !== 0) suffix = TENS_SUFFIX[tens]
+  else suffix = 'ü'
+  return `${n}’${suffix}`
+}
